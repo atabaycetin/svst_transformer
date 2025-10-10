@@ -1,0 +1,19 @@
+# Python / IDE
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# Envs
+.test0_env/
+
+# Data / outputs / models
+data/
+test_data/
+outputs/
+*.pth
+*.pt
+*.onnx
