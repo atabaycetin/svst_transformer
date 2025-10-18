@@ -1,4 +1,6 @@
+import os
 import torch
+from tqdm import tqdm
 import torch.nn as nn
 import torch.optim as optim
 from transformers import TimesformerConfig, TimesformerModel
@@ -10,7 +12,14 @@ from prepare_data_ts_transformer import (
     load_dataframe,
 )
 
-CSV_PATH = "farm_data.csv"
+# Set random seed for reproducibility
+torch.manual_seed(42)
+
+# Set path
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+csv_path = "farm_data.csv"
+
+# Set default fallback
 DEFAULT_NUM_FRAMES = 8
 
 class AugmentedTimeSeriesDataset(Dataset):
@@ -76,15 +85,13 @@ class TimeSeriesTransformer(nn.Module):
 
 
 def main():
-    # Repro
-    torch.manual_seed(42)
 
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # Dataframe & max sequence length
-    df = load_dataframe(CSV_PATH)
+    df = load_dataframe(csv_path)
     MAX_T = int(df.groupby("Field_ID").size().max()) if len(df) else DEFAULT_NUM_FRAMES
 
     # Dataset & splits
@@ -124,7 +131,7 @@ def main():
         correct = 0
         total = 0
 
-        for images, labels in train_loader:
+        for images, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS}", leave=False):
             images = images.to(device)
             labels = labels.long().to(device)
 
@@ -218,8 +225,12 @@ def main():
     print(f"Test Accuracy: {test_acc:.4f}")
 
     # Save
-    torch.save(model.state_dict(), "prot7_time_series_transformer.pth")
-    print("✅ Model saved as prot7_time_series_transformer.pth")
+    checkpoint_dir = os.path.join(ROOT, "checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    save_path = os.path.join(checkpoint_dir, "ts_transformer.pth")
+
+    torch.save(model.state_dict(), save_path)
+    print(f"✅ Model saved to {save_path}")
 
 
 if __name__ == "__main__":

@@ -8,8 +8,9 @@ from collections import Counter
 from prepare_data_ts_transformer import TimeSeriesImageDataset, load_dataframe
 from train_ts_transformer import TimeSeriesTransformer
 
-CHECKPOINT_DIR = "../checkpoints"
-CSV_FILE = "farm_data.csv"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+checkpoint_dir = os.path.join(ROOT, "checkpoints")
+csv_path = "farm_data.csv"
 DEFAULT_FALLBACK_T = 8
 
 def is_timeseries_checkpoint(state_dict: dict) -> bool:
@@ -113,16 +114,16 @@ def main():
     print(f"Using device: {device}")
 
     # Discover checkpoints
-    ckpt_paths = sorted(glob.glob(os.path.join(CHECKPOINT_DIR, "*.pth")))
+    ckpt_paths = sorted(glob.glob(os.path.join(checkpoint_dir, "*.pth")))
     if not ckpt_paths:
-        print(f"[error] No .pth files found in: {os.path.abspath(CHECKPOINT_DIR)}")
+        print(f"[error] No .pth files found in: {os.path.abspath(checkpoint_dir)}")
         return
-    print(f"Found {len(ckpt_paths)} checkpoint(s) in {CHECKPOINT_DIR}.")
+    print(f"Found {len(ckpt_paths)} checkpoint(s) in {checkpoint_dir}.")
 
     # CSV stats
-    df = load_dataframe(CSV_FILE)
+    df = load_dataframe(csv_path)
     csv_max_T = int(df.groupby("Field_ID").size().max()) if len(df) else DEFAULT_FALLBACK_T
-    print(f"CSV: {CSV_FILE} | fields={df['Field_ID'].nunique()} | max_seq_len={csv_max_T}")
+    print(f"CSV: {csv_path} | fields={df['Field_ID'].nunique()} | max_seq_len={csv_max_T}")
 
     results = []  # (filename, T, samples, acc, mean_conf, per_class_acc)
 
@@ -160,7 +161,7 @@ def main():
             print(f"[warn] Unexpected keys: {unexpected}")
 
         # Build loader (data padded to inferred_T; we also pad/truncate at batch-time if needed)
-        test_loader = build_test_loader(CSV_FILE, max_seq_length=inferred_T, batch_size=8, num_workers=2)
+        test_loader = build_test_loader(csv_path, max_seq_length=inferred_T, batch_size=8, num_workers=2)
 
         # Evaluate
         acc, mean_conf, per_class_acc, n = evaluate(model, test_loader, device, verbose=False)

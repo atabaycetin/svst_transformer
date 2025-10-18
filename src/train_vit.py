@@ -1,4 +1,6 @@
+import os
 import torch
+from tqdm import tqdm
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import random_split, DataLoader
@@ -8,6 +10,9 @@ from prepare_data_vit import vit_dataloader, ViTDataset, df
 
 # Set random seed for reproducibility
 torch.manual_seed(42)
+
+# Set path
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Load data from DataFrame
 full_dataset = ViTDataset(df)
@@ -48,78 +53,86 @@ class ViTModel(nn.Module):
         outputs = self.model(pixel_values=x)
         return outputs.logits  # Use logits for classification
 
-# Initialize model
-model = ViTModel().to(device)
+def main():
+    # Initialize model
+    model = ViTModel().to(device)
 
-# Define Loss, Optimizer, and Scheduler
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=1e-5, weight_decay=1e-5)
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.9)
+    # Define Loss, Optimizer, and Scheduler
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=1e-5, weight_decay=1e-5)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.9)
 
-# Training Loop with validation
-EPOCHS = 10
-for epoch in range(EPOCHS):
-    model.train()
-    running_loss = 0.0
-    correct = 0
-    total = 0
+    # Training Loop with validation
+    EPOCHS = 10
+    for epoch in range(EPOCHS):
+        model.train()
+        running_loss = 0.0
+        correct = 0
+        total = 0
 
-    for images, labels in train_loader:
-        images, labels = images.to(device), labels.to(device).long()
-        optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-
-        running_loss += loss.item()
-        _, predicted = torch.max(outputs, 1)
-        correct += (predicted == labels).sum().item()
-        total += labels.size(0)
-
-    train_loss = running_loss / len(train_loader)
-    train_acc = correct / total
-
-    # Validation phase
-    model.eval()
-    val_loss = 0.0
-    correct_val = 0
-    total_val = 0
-    with torch.no_grad():
-        for images, labels in val_loader:
+        for images, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS}", leave=False):
             images, labels = images.to(device), labels.to(device).long()
+            optimizer.zero_grad()
             outputs = model(images)
             loss = criterion(outputs, labels)
-            val_loss += loss.item()
+            loss.backward()
+            optimizer.step()
+
+            running_loss += loss.item()
             _, predicted = torch.max(outputs, 1)
-            correct_val += (predicted == labels).sum().item()
-            total_val += labels.size(0)
+            correct += (predicted == labels).sum().item()
+            total += labels.size(0)
 
-    val_loss /= len(val_loader)
-    val_acc = correct_val / total_val
+        train_loss = running_loss / len(train_loader)
+        train_acc = correct / total
 
-    print(f"Epoch {epoch+1}/{EPOCHS} | Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f} | "
-          f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
+        # Validation phase
+        model.eval()
+        val_loss = 0.0
+        correct_val = 0
+        total_val = 0
+        with torch.no_grad():
+            for images, labels in val_loader:
+                images, labels = images.to(device), labels.to(device).long()
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                _, predicted = torch.max(outputs, 1)
+                correct_val += (predicted == labels).sum().item()
+                total_val += labels.size(0)
 
-    scheduler.step()  # Update learning rate
+        val_loss /= len(val_loader)
+        val_acc = correct_val / total_val
 
-print("✅ Training complete!")
+        print(f"Epoch {epoch + 1}/{EPOCHS} | Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f} | "
+              f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
 
-# Evaluate on test set
-model.eval()
-correct_test = 0
-total_test = 0
-with torch.no_grad():
-    for images, labels in test_loader:
-        images, labels = images.to(device), labels.to(device).long()
-        outputs = model(images)
-        _, predicted = torch.max(outputs, 1)
-        correct_test += (predicted == labels).sum().item()
-        total_test += labels.size(0)
+        scheduler.step()  # Update learning rate
 
-test_acc = correct_test / total_test
-print(f"Test Accuracy: {test_acc:.4f}")
+    print("✅ Training complete!")
 
-# Save the model
-torch.save(model.state_dict(), "prot5_vit_model.pth")
-print("✅ Model saved as prot5_vit_model.pth")
+    # Evaluate on test set
+    model.eval()
+    correct_test = 0
+    total_test = 0
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images, labels = images.to(device), labels.to(device).long()
+            outputs = model(images)
+            _, predicted = torch.max(outputs, 1)
+            correct_test += (predicted == labels).sum().item()
+            total_test += labels.size(0)
+
+    test_acc = correct_test / total_test
+    print(f"Test Accuracy: {test_acc:.4f}")
+
+    # Save the model
+    checkpoint_dir = os.path.join(ROOT, "checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    save_path = os.path.join(checkpoint_dir, "vit.pth")
+
+    torch.save(model.state_dict(), save_path)
+    print(f"✅ Model saved to {save_path}")
+
+if __name__ == "__main__":
+    main()
