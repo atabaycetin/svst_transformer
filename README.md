@@ -34,14 +34,27 @@ This project was developed for the **SVST Hackathon** ([svst.it/hackathon](https
 
 ```
 .
-├── prepare_data_timeseries_transformer.py   # dataset & transforms for sequences
-├── prepare_data_vit.py                      # dataset for 9-channel ViT
-├── setup_data.py                            # helper to build farm_data.csv (optional)
-├── train_time_series_transformer.py         # training loop (TimeSformer)
-├── test_time_series_transformer.py          # evaluator for time-series checkpoints
-├── train_vit.py                             # training loop (ViT baseline)
-├── farm_data.csv                            # (NOT committed here) expected data manifest
-└── checkpoints/                             # (gitignored) put your *.pth here to test
+├── src/
+│   ├── data/
+│   │   ├── CIG_infected/            # example raw tiles (images)
+│   │   ├── CIG_non-infected/
+│   │   ├── EVI_infected/
+│   │   ├── EVI_non-infected/
+│   │   ├── NDVI_infected/
+│   │   └── NDVI_non-infected/
+│   ├── farm_data.csv                # data manifest used by loaders
+│   ├── prepare_data_ts_transformer.py
+│   ├── prepare_data_vit.py
+│   ├── setup_data.py
+│   ├── test_ts_transformer.py
+│   ├── test_vit.py
+│   ├── train_ts_transformer.py
+│   └── train_vit.py
+├── checkpoints/                     # (gitignored) saved *.pth; created at runtime
+├── README.md
+├── requirements.txt
+├── LICENSE
+└── .gitignore
 ```
 
 You may also add a small synthetic data generator to let others run the pipeline without real data.
