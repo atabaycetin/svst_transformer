@@ -26,7 +26,10 @@ def get_transformations():
     return image_transform
 
 class TimeSeriesImageDataset(Dataset):
-    def __init__(self, path, max_seq_length, df=None, transform=None):
+    def __init__(self, max_seq_length,
+                 df=None,
+                 path=None,
+                 transform=None):
         if df is None and path is not None:
             df = pd.read_csv(path)
             df["Date"] = pd.to_datetime(df["Date"])
@@ -88,7 +91,7 @@ def main():
 
     time_series_dataloader = DataLoader(time_series_dataset, batch_size=8, shuffle=True)
 
-    print("✅ Time-Series Transformer dataset is ready and padded!")
+    print("✅ Time-Series Transformer data is ready and padded!")
 
 if __name__ == "__main__":
     main()

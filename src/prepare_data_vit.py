@@ -48,10 +48,10 @@ class ViTDataset(Dataset):
         return self.transform(Image.open(path).convert("RGB"))
 
 
-# Create dataset
+# Create data
 vit_dataset = ViTDataset(df)
 
 # Dataloader
 vit_dataloader = DataLoader(vit_dataset, batch_size=8, shuffle=True)
 
-print("✅ ViT dataset is ready!")
+print("✅ ViT data is ready!")

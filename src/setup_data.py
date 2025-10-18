@@ -4,7 +4,8 @@ import pandas as pd
 
 """
 This script takes the images and puts them into a dataframe encoding 'Infestation' attribute as 1 or 0.
-Comments have been added using LLMs. Let me know if there are any issues/unclarities.
+The output is a csv file to be used as input to prepare data scripts
+Comments have been added using LLMs. Let me know if there are any issues.
 """
 
 # Define the parent directory where all index-type folders are stored

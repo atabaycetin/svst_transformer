@@ -9,10 +9,10 @@ from prepare_data_vit import vit_dataloader, ViTDataset, df
 # Set random seed for reproducibility
 torch.manual_seed(42)
 
-# Load dataset from DataFrame
+# Load data from DataFrame
 full_dataset = ViTDataset(df)
 
-# Split dataset: 70% train, 20% validation, 10% test
+# Split data: 70% train, 20% validation, 10% test
 dataset_size = len(full_dataset)
 train_size = int(0.7 * dataset_size)
 val_size = int(0.2 * dataset_size)
