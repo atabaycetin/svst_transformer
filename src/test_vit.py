@@ -13,9 +13,10 @@ from prepare_data_vit import ViTDataset
 from prepare_data_ts_transformer import load_dataframe
 
 
+# Project paths
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHECKPOINT_DIR = os.path.join(ROOT, "checkpoints")
-CSV_FILE = "farm_data.csv"
+csv_path = os.path.join(ROOT, "src", "farm_data.csv")
 
 
 def is_timeseries_checkpoint(state_dict: dict) -> bool:
@@ -26,6 +27,7 @@ def is_timeseries_checkpoint(state_dict: dict) -> bool:
 
 
 def is_vit_checkpoint(state_dict: dict) -> bool:
+    # Look for typical ViT keys
     for k, v in state_dict.items():
         if "vit.embeddings.patch_embeddings.projection.weight" in k:
             return True
@@ -48,7 +50,7 @@ def infer_vit_params(state_dict: dict):
 
     proj_key = None
     for k, v in state_dict.items():
-        if k.endswith("vit.embeddings.patch_embeddings.projection.weight") and v.ndim == 4:
+        if k.endswith("vit.embeddings.patch_embeddings.projection.weight") and isinstance(v, torch.Tensor) and v.ndim == 4:
             proj_key = k
             break
     if proj_key is None:
@@ -97,9 +99,9 @@ class ViTForClassification(nn.Module):
         self.vit = ViTModel(config)
         self.classifier = nn.Linear(config.hidden_size, num_classes)
 
-    def forward(self, x):  # x: [B, 9, 224, 224]
-        out = self.vit(pixel_values=x)       # last_hidden_state [B, tokens, H]
-        pooled = out.last_hidden_state[:, 0] # CLS token
+    def forward(self, x):  # x: [B, C, 224, 224], C should match num_channels (e.g., 9)
+        out = self.vit(pixel_values=x)         # last_hidden_state [B, tokens, H]
+        pooled = out.last_hidden_state[:, 0]   # CLS token
         return self.classifier(pooled)
 
 
@@ -112,8 +114,8 @@ def evaluate(model, loader, device):
 
     with torch.no_grad():
         for images, labels in loader:
-            images = images.to(device)
-            labels = labels.long().to(device)
+            images = images.to(device, non_blocking=True)
+            labels = labels.long().to(device, non_blocking=True)
 
             logits = model(images)
             probs = F.softmax(logits, dim=1)
@@ -135,28 +137,49 @@ def evaluate(model, loader, device):
     return acc, mean_conf, per_class_acc, total
 
 
-def build_loader(csv_path, batch_size=8, num_workers=2):
-    dataset = ViTDataset(csv_path)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=False,
-                      num_workers=num_workers, pin_memory=torch.cuda.is_available())
+def build_loader(df_or_df, batch_size=8, num_workers=0, device=None):
+    """
+    IMPORTANT: Your current prepare_data_vit.ViTDataset expects a DataFrame,
+    not a CSV path. We pass the DataFrame here.
+    """
+    dataset = ViTDataset(df_or_df)
+    pin = (device is not None and device.type == "cuda")
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,   # 0 is safer on Windows while debugging
+        pin_memory=pin
+    )
 
 
 def main():
+    # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
+    # Checkpoints
     ckpt_paths = sorted(glob.glob(os.path.join(CHECKPOINT_DIR, "*.pth")))
     if not ckpt_paths:
         print(f"[error] No .pth files found in: {os.path.abspath(CHECKPOINT_DIR)}")
         return
     print(f"Found {len(ckpt_paths)} checkpoint(s) in {CHECKPOINT_DIR}.")
 
-    if not os.path.exists(os.path.join(ROOT, CSV_FILE)):
-        print(f"[error] Missing CSV: {CSV_FILE}")
+    # CSV presence (csv_path is already absolute)
+    if not os.path.exists(csv_path):
+        print(f"[error] Missing CSV: {csv_path}")
         return
-    df = load_dataframe(CSV_FILE)
-    n_fields = df["Field_ID"].nunique()
-    print(f"CSV: {CSV_FILE} | fields={n_fields}")
+
+    # Load the dataframe once; ViTDataset needs a DataFrame
+    df = load_dataframe(csv_path)
+    if "Field_ID" in df.columns:
+        n_fields = df["Field_ID"].nunique()
+        print(f"CSV: {csv_path} | fields={n_fields}")
+    else:
+        print(f"CSV: {csv_path}")
+
+    # Build one shared loader (deterministic eval across checkpoints)
+    loader = build_loader(df, batch_size=8, num_workers=0, device=device)
 
     results = []
 
@@ -165,9 +188,15 @@ def main():
         print("\n" + "=" * 80)
         print(f"Evaluating checkpoint: {fname}")
 
+        # Load and normalize state dict
         obj = torch.load(ckpt_path, map_location="cpu")
         state = obj.get("state_dict", obj) if isinstance(obj, dict) else obj
 
+        # If the keys are prefixed with "model.", strip it so they match our module names
+        if any(k.startswith("model.") for k in state.keys()):
+            state = { (k[6:] if k.startswith("model.") else k): v for k, v in state.items() }
+
+        # Skip non-ViT (e.g., your time-series transformer)
         if is_timeseries_checkpoint(state):
             print(f"[skip] {fname} looks like a time-series transformer (has time_embeddings).")
             continue
@@ -176,9 +205,11 @@ def main():
             print(f"[skip] {fname} does not look like a ViT checkpoint.")
             continue
 
+        # Infer ViT hyperparameters from weights (channels/patch/hidden/layers/classes)
         in_ch, patch, hidden, layers, ncls = infer_vit_params(state)
         print(f"Inferred ViT params: in_ch={in_ch}, patch={patch}, hidden={hidden}, layers={layers}, classes={ncls}")
 
+        # Build model and load weights (allowing some flexibility)
         model = ViTForClassification(
             num_channels=in_ch,
             img_size=224,
@@ -189,11 +220,12 @@ def main():
         ).to(device)
 
         missing, unexpected = model.load_state_dict(state, strict=False)
-        if missing:    print(f"[warn] Missing keys: {missing}")
-        if unexpected: print(f"[warn] Unexpected keys: {unexpected}")
+        if missing:
+            print(f"[warn] Missing keys ({len(missing)}): {missing[:10]}{' ...' if len(missing) > 10 else ''}")
+        if unexpected:
+            print(f"[warn] Unexpected keys ({len(unexpected)}): {unexpected[:10]}{' ...' if len(unexpected) > 10 else ''}")
 
-        loader = build_loader(os.path.join(ROOT, CSV_FILE), batch_size=8, num_workers=2)
-
+        # Evaluate
         acc, mean_conf, per_class_acc, n = evaluate(model, loader, device)
         print(f"Samples: {n} | Accuracy: {acc:.4f} | Mean confidence: {mean_conf:.4f}")
         for c, a in per_class_acc.items():
