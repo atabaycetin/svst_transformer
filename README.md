@@ -184,3 +184,7 @@ Add a `LICENSE` file at the root.
 
 This was my **first machine learning project**. It was challenging and fun, and the goal here is to share the code structure and lessons—not to provide a production system or definitive claims about pest infestation. If you build on this, please validate against **trusted labels** and domain expertise.
 
+### References
+
+1. [A COMPARATIVE STUDY OF SATELLITE IMAGE RESOLUTIONS FOR DETECTING PEST DAMAGE IN SUNFLOWER FIELDS](https://isprs-archives.copernicus.org/articles/XLVIII-4-W9-2024/133/2024/)
+
