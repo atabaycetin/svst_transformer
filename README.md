@@ -3,7 +3,7 @@
 Educational project exploring whether **time-series of vegetation indices** can help flag **possible pest infestation** in farm fields.
 
 > **Important:** This repository is for learning and demonstration.  
-> I used Sentinel-2 imagery to derive **EVI**, **NDVI**, and **CIG** (three-channel RGB renders per index). I could **not** confirm with 100% certainty which fields were actually infested during the supposed infestation period. Treat any results as **heuristic** rather than ground truth.
+> I used Sentinel-2 imagery to derive **EVI**, **NDVI**, and **CIG** (three-channel RGB renders per index) manually. I could **not** confirm with 100% certainty which fields were actually infested during the supposed infestation period. Treat any results as **heuristic** rather than ground truth.
 
 
 ## Background
